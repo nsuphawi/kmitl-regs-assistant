@@ -11,7 +11,7 @@ Ask questions about KMITL's official student regulations and guidebooks and get 
 | # | Family | Where |
 |---|---|---|
 | 1 | Structured output + schema validation (one repair retry, citation allow-check) | `app/schemas.py`, `app/answer.py` |
-| 2 | RAG: chunk → embed → index → hybrid retrieve (BM25 + vector, RRF) → cite | `app/ingest.py`, `app/store.py`, `app/retrieve.py` |
+| 2 | RAG: clause-aware chunking (split at Article/clause numbers, Article heading prefixed) → embed → index → hybrid retrieve (BM25 + vector, RRF, optional HyDE expansion) → cite | `app/ingest.py`, `app/store.py`, `app/retrieve.py` |
 | 3 | **Retrieval evaluation**: hit@k, recall@k, MRR on a labelled set; baselines; chunk-size and `min_score` sweeps | `evaluation/` |
 | 4 | **Agent loop with tools**: native function calling with a prompted-JSON fallback, allow-list, step cap, repeat-query guard | `app/agent.py`, `app/tools.py` |
 | 6 | Served interface: FastAPI `POST /ask` and an SSE stream of agent steps with a small web UI | `app/api.py`, `app/static/index.html` |
@@ -41,6 +41,7 @@ cp .env.example .env            # fill in OPENAI_API_KEY / OPENAI_BASE_URL (neve
 
 python -m scripts.fetch_corpus  # downloads the 5 PDFs into data/raw/ and writes MANIFEST.json
 python -m scripts.ocr_scanned   # OCR the 2 image-only PDFs -> .txt (already committed; needs tesseract)
+python -m scripts.ocr_clean     # strip translation-agency stamps from the OCR text (idempotent)
 python -m scripts.build_index   # chunk + embed -> data/index/
 ```
 
@@ -80,14 +81,15 @@ Aim for about 24 answerable items (mix factual, numeric, keyword like form codes
 **2. Retrieval: baselines, chunk size and `min_score`.** No LLM calls.
 
 ```bash
-python -m evaluation.run_retrieval_eval --chunk-sizes 150,300,600
+python -m evaluation.run_retrieval_eval --strategies window,clause --chunk-sizes 100,150,300
+python -m evaluation.run_retrieval_eval --hyde        # + HyDE query expansion (1 model call per question)
 python -m evaluation.run_retrieval_eval --rerank      # optional: + LLM 1-10 reranker
 ```
 
 This writes `evaluation/results/retrieval.md`:
 
 - **Baselines:** BM25-only and vector-only, compared with hybrid RRF, on hit@1/3/5, recall@5 and MRR.
-- **Measured improvement over a naive default:** the chunk-size sweep and the `min_score` sweep. The `min_score` sweep trades answerable hit@5 against correct abstention on unanswerable questions. Put the winning values in `.env` and say why in the report.
+- **Measured improvement over a naive default:** fixed-window vs clause-aware chunking, the chunk-size sweep, HyDE on/off, and the `min_score` sweep. The `min_score` sweep trades answerable hit@5 against correct abstention on unanswerable questions. Put the winning values in `.env` and say why in the report.
 
 **3. End-to-end answers.** Closed-book baseline vs RAG vs agent.
 
@@ -128,3 +130,13 @@ tests/        offline unit tests with a fictional fixture corpus
 - PDF text extraction loses table structure, so grade tables and fee tables may chunk badly.
 - The LLM judge is the same small model as the generator. Spot-check its verdicts by hand and report the agreement rate.
 - The corpus covers English documents only. The 2016 regulations may have been amended since.
+
+## Error analysis tool
+
+```bash
+python -m scripts.debug_rank "How many credits can an undergraduate register in a regular semester?" --find "not more than 22 credits"
+```
+
+Shows where the chunk containing the answer ranks in each list (BM25 / vector, question / HyDE), after RRF fusion, and whether `MIN_SCORE` removes it.
+
+Worked example: with 300-word fixed windows the credit-limit clause (2022 regulations, Art. 14.4) sat at the end of a chunk about tuition fees and ranked 39th (BM25) and 109th (vector), so it never reached the model and the app answered "not specified". Clause-aware chunking isolates 14.4 under its Article heading.
