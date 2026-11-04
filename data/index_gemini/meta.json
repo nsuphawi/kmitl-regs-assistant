@@ -1,0 +1,1 @@
+{"chunk_strategy": "clause", "chunk_words": 150, "chunk_overlap": 25, "n_chunks": 464, "embedder": {"provider": "openai", "model": "gemini-embedding-2"}}

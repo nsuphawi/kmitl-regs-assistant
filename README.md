@@ -1,5 +1,7 @@
 # KMITL Regulations Assistant
 
+**Live demo:** https://kmitl-regs-assistant.onrender.com/ (free tier: the first visit after 15 idle minutes takes about a minute to wake up; the deployment uses Gemini, while the reported evaluation used gemma-4-E4B-it)
+
 Ask questions about KMITL's official student regulations and guidebooks and get a cited answer, or a clear "not in the documents". An agent decides whether to search the documents, use a calculator (for GPA questions) or answer directly. Every answer is schema-validated, and every citation is checked against the passages the model was actually shown.
 
 **Who it's for:** KMITL students, especially international students, who need answers like "how many credits can I register?", "what GPA gets me dismissed?" or "how long can I take leave?". Today those answers are buried in five long PDFs.
