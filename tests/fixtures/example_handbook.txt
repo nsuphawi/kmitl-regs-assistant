@@ -1,0 +1,8 @@
+FICTIONAL TEST FIXTURE - Example Institute of Technology Student Handbook. This text is invented for unit tests only and says nothing about KMITL.
+
+Section 1 Registration. A regular semester student shall register for not less than 12 credits and not more than 22 credits. Summer session registration shall not exceed 9 credits. Late registration incurs a fee of 500 baht per day.
+Section 2 Leave of absence. A student may request leave of absence for no more than two consecutive regular semesters. Form ACAD-07 must be submitted to the registrar office.
+Section 3 Grading. Grades are A (4.0), B+ (3.5), B (3.0), C+ (2.5), C (2.0), D+ (1.5), D (1.0) and F (0.0). A student whose cumulative grade point average falls below 1.50 shall be dismissed.
+Section 4 Graduation. To graduate with first class honours a student must obtain a cumulative GPA of at least 3.60 and must not have retaken any course.
+Section 5 Visa. International students must report their address to immigration every 90 days using form TM.47.
+Section 6 Campus life. The library opens at 08:00 and closes at 20:00 on weekdays. Bicycles may be parked only in marked areas.

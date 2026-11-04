@@ -1,0 +1,15 @@
+{
+  "_comment": "Public KMITL documents linked from https://oia.kmitl.ac.th/guidebook-regulation/ (Office of International Affairs). Fetched by scripts/fetch_corpus.py.",
+  "documents": [
+    {"name": "KMITL_Undergraduate_Regulations_2016", "drive_id": "1GnkCWTeBgQ_hZfQrQTpK-rmtTe2UGCXD",
+     "page": "https://drive.google.com/file/d/1GnkCWTeBgQ_hZfQrQTpK-rmtTe2UGCXD/view"},
+    {"name": "KMITL_Graduate_Regulations_2016", "drive_id": "1ktoTihON1XPm1h0ywCqAHcxJAGXwhL3M",
+     "page": "https://drive.google.com/file/d/1ktoTihON1XPm1h0ywCqAHcxJAGXwhL3M/view"},
+    {"name": "KMITL_Undergraduate_Guidebook_2022", "drive_id": "1gpfHpelBmtxby7BD_bGnVHgTntqzjSWX",
+     "page": "https://drive.google.com/file/d/1gpfHpelBmtxby7BD_bGnVHgTntqzjSWX/view"},
+    {"name": "KMITL_Graduate_Guidebook_2022", "drive_id": "1kfyQ3WsTxIUIDJbKLQa3MR-JuJ6BEczf",
+     "page": "https://drive.google.com/file/d/1kfyQ3WsTxIUIDJbKLQa3MR-JuJ6BEczf/view"},
+    {"name": "KMITL_International_Student_Guidebook", "drive_id": "1EYAd7LkC0AKxCR3YOBIQowG5G_K2l4Wt",
+     "page": "https://drive.google.com/file/d/1EYAd7LkC0AKxCR3YOBIQowG5G_K2l4Wt/view"}
+  ]
+}

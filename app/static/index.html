@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KMITL Regulations Assistant</title>
+<style>
+  :root { --bg:#fafaf8; --fg:#1d1d1b; --muted:#6b6b66; --line:#e3e2dc; --accent:#e35205; --card:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecebe6; --muted:#9a9993; --line:#2e2d2a; --card:#1f1e1c; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:760px; margin:0 auto; padding:32px 16px; }
+  h1 { font-size:22px; margin:0 0 4px; } p.sub { color:var(--muted); margin:0 0 20px; }
+  form { display:flex; gap:8px; }
+  input { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); font:inherit; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #steps { margin:20px 0 0; padding:0; list-style:none; font:13px/1.5 ui-monospace, monospace; color:var(--muted); }
+  #steps li { padding:4px 0; border-bottom:1px dashed var(--line); }
+  #answer { margin-top:20px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; display:none; }
+  .src { margin-top:12px; padding-top:10px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); }
+  .src b { color:var(--fg); } .abstain { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>KMITL Regulations Assistant</h1>
+  <p class="sub">Answers from the KMITL student regulations and guidebooks, with citations. Agent steps stream live over SSE.</p>
+  <form id="f"><input id="q" placeholder="e.g. What is the maximum study period for a 4-year bachelor's program?" required minlength="3"><button id="go">Ask</button></form>
+  <ul id="steps"></ul>
+  <div id="answer"></div>
+</main>
+<script>
+const f = document.getElementById('f'), q = document.getElementById('q'), go = document.getElementById('go');
+const steps = document.getElementById('steps'), out = document.getElementById('answer');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function step(t) { const li = document.createElement('li'); li.textContent = t; steps.appendChild(li); }
+f.onsubmit = e => {
+  e.preventDefault(); steps.innerHTML = ''; out.style.display = 'none'; go.disabled = true;
+  const es = new EventSource('/ask/stream?question=' + encodeURIComponent(q.value));
+  es.addEventListener('tool_call', ev => { const d = JSON.parse(ev.data); step(`step ${d.step} → ${d.name}(${JSON.stringify(d.args)})`); });
+  es.addEventListener('tool_result', ev => { const d = JSON.parse(ev.data); step(`  ${d.ok ? '✓' : '✗'} ${d.summary}`); });
+  es.addEventListener('repair', ev => step('  repairing invalid JSON answer…'));
+  es.addEventListener('info', ev => step(JSON.parse(ev.data).message));
+  es.addEventListener('final', ev => {
+    const d = JSON.parse(ev.data), a = d.answer;
+    let html = `<div class="${a.abstained ? 'abstain' : ''}">${esc(a.answer)}</div>`;
+    if (d.sources.length) html += '<div class="src">' + d.sources.map(s => `<div><b>[${esc(s.chunk_id)}]</b> ${esc(s.source)}</div>`).join('') + '</div>';
+    html += `<div class="src">stopped: ${esc(d.stopped)} after ${d.steps} step(s)</div>`;
+    out.innerHTML = html; out.style.display = 'block';
+  });
+  es.addEventListener('error', ev => { if (ev.data) step('error: ' + JSON.parse(ev.data).message); });
+  es.addEventListener('done', () => { es.close(); go.disabled = false; });
+  es.onerror = () => { es.close(); go.disabled = false; };
+};
+</script>
+</body>
+</html>
