@@ -42,7 +42,8 @@ def _retriever() -> Retriever:
 @app.get("/health")
 def health() -> dict:
     r = STATE.get("retriever")
-    return {"ok": r is not None, "chunks": len(r.chunks) if r else 0, "model": settings.chat_model}
+    return {"ok": r is not None, "chunks": len(r.chunks) if r else 0, "model": settings.chat_model,
+            "embeddings": r.index.meta.get("embedder", {}).get("model") if r else None}
 
 
 @app.post("/ask", response_model=AskResponse)

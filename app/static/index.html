@@ -2,57 +2,188 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>KMITL Regulations Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
 <style>
-  :root { --bg:#fafaf8; --fg:#1d1d1b; --muted:#6b6b66; --line:#e3e2dc; --accent:#e35205; --card:#fff; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecebe6; --muted:#9a9993; --line:#2e2d2a; --card:#1f1e1c; } }
-  * { box-sizing:border-box; }
-  body { margin:0; font:15px/1.55 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-  main { max-width:760px; margin:0 auto; padding:32px 16px; }
-  h1 { font-size:22px; margin:0 0 4px; } p.sub { color:var(--muted); margin:0 0 20px; }
-  form { display:flex; gap:8px; }
-  input { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); font:inherit; }
-  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:wait; }
-  #steps { margin:20px 0 0; padding:0; list-style:none; font:13px/1.5 ui-monospace, monospace; color:var(--muted); }
-  #steps li { padding:4px 0; border-bottom:1px dashed var(--line); }
-  #answer { margin-top:20px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; display:none; }
-  .src { margin-top:12px; padding-top:10px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); }
-  .src b { color:var(--fg); } .abstain { color:var(--accent); }
+/* Layout: a working desk — question and cited answer on the left, the evidence trail on the right; stacks on phones. */
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --ink: #15181d; --muted: #586172; --line: #dadee5;
+  --accent: #c94a0c; --accent-ink: #ffffff; --accent-soft: rgba(201, 74, 12, 0.10);
+  --good: #1d7148; --warn: #9a5800; --mark: rgba(201, 74, 12, 0.16);
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #101216; --surface: #191c22; --ink: #e8ebf0; --muted: #9aa3b3; --line: #2a2f38;
+  --accent: #ff7b3d; --accent-ink: #1a0c04; --accent-soft: rgba(255, 123, 61, 0.12);
+  --good: #5cc28f; --warn: #e3a54a; --mark: rgba(255, 123, 61, 0.22); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #101216; --surface: #191c22; --ink: #e8ebf0; --muted: #9aa3b3; --line: #2a2f38;
+  --accent: #ff7b3d; --accent-ink: #1a0c04; --accent-soft: rgba(255, 123, 61, 0.12);
+  --good: #5cc28f; --warn: #e3a54a; --mark: rgba(255, 123, 61, 0.22); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { display: grid; gap: 6px; margin-bottom: 22px; }
+.eyebrow { font: 500 12px/1 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 600 clamp(28px, 4.2vw, 40px)/1.05 var(--f-display); letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.lede { margin: 2px 0 0; max-width: 64ch; color: var(--muted); }
+.meta { font: 12.5px/1.4 var(--f-mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.meta a { color: inherit; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.col { display: grid; gap: 16px; min-width: 0; }
+h2 { font: 600 13px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+
+label.q { display: block; font-weight: 600; margin-bottom: 8px; }
+textarea { width: 100%; min-height: 76px; resize: vertical; font: 16px/1.45 var(--f-body); color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+textarea:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+button { font: 600 14px/1 var(--f-body); border-radius: 7px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: 0.55; cursor: progress; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.chip { font: 13px/1.3 var(--f-body); padding: 6px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--ink); text-align: left; }
+.chip:hover { border-color: var(--accent); }
+.status { font: 13px/1.4 var(--f-mono); color: var(--muted); min-height: 1.4em; }
+
+.answer-text { font-size: 16.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer-empty { color: var(--muted); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--f-mono); padding: 5px 8px; border-radius: 5px; margin-bottom: 12px; }
+.badge.ok { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.badge.no { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.badge.plain { background: var(--bg); color: var(--muted); }
+.cite-mark { font: 500 11px/1 var(--f-mono); color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 2px 4px; margin: 0 2px; border: 0; cursor: pointer; vertical-align: 1px; }
+.citations { display: grid; gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+.cite { display: grid; gap: 4px; }
+.cite .src { font: 12.5px/1.4 var(--f-mono); color: var(--muted); }
+.cite .src b { color: var(--ink); font-weight: 500; }
+.cite blockquote { margin: 0; padding: 6px 0 6px 12px; border-left: 3px solid var(--accent); font-style: italic; overflow-wrap: anywhere; }
+
+ol.trace { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: step; }
+ol.trace li { counter-increment: step; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; font-size: 14px; }
+ol.trace li::before { content: counter(step); font: 500 12px/22px var(--f-mono); text-align: center; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+ol.trace code { font: 12.5px var(--f-mono); overflow-wrap: anywhere; }
+.trace-empty { color: var(--muted); font-size: 14px; }
+
+.passages { display: grid; gap: 8px; }
+details.psg { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+details.psg[open] { background: var(--surface); }
+details.psg.cited { border-color: var(--accent); }
+details.psg summary { cursor: pointer; padding: 10px 12px; display: grid; gap: 3px; list-style: none; }
+details.psg summary::-webkit-details-marker { display: none; }
+.psg-id { font: 12px/1.3 var(--f-mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.psg-id .tag { color: var(--accent); }
+.psg-head { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.psg-body { padding: 0 12px 12px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+.note { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 28px; padding-top: 14px; max-width: 80ch; }
+.banner { border: 1px solid var(--line); border-left: 3px solid var(--warn); background: var(--surface); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 14px; }
+@media (prefers-reduced-motion: no-preference) { .fade { animation: fade .25s ease-out both; } @keyframes fade { from { opacity: .4 } to { opacity: 1 } } }
+
+body { margin: 0; }
 </style>
 </head>
 <body>
-<main>
-  <h1>KMITL Regulations Assistant</h1>
-  <p class="sub">Answers from the KMITL student regulations and guidebooks, with citations. Agent steps stream live over SSE.</p>
-  <form id="f"><input id="q" placeholder="e.g. What is the maximum study period for a 4-year bachelor's program?" required minlength="3"><button id="go">Ask</button></form>
-  <ul id="steps"></ul>
-  <div id="answer"></div>
-</main>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">KMITL · student regulations</div>
+    <h1>KMITL Regulations Assistant</h1>
+    <p class="lede">Ask about credits, grades, leave of absence, graduation or student visas. Answers come only from KMITL's official regulations and cite the clause they used, or say plainly that the documents don't cover the question.</p>
+    <div class="meta"><span>5 documents</span><span id="chunks">464 clause passages</span><span id="model">model: …</span><a href="https://github.com/nsuphawi/kmitl-regs-assistant" target="_blank" rel="noopener">Source code ↗</a></div>
+  </header>
+  <div class="grid">
+    <div class="col">
+      <section class="panel">
+        <form id="form">
+          <label class="q" for="q">Your question</label>
+          <textarea id="q" name="q" maxlength="500" minlength="3" required>How many credits can an undergraduate register in a regular semester?</textarea>
+          <div class="actions">
+            <button type="submit" id="ask" class="primary">Ask</button>
+            <span class="status" id="status" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+        <div class="chips" id="chips" aria-label="Example questions"></div>
+      </section>
+      <section class="panel" aria-labelledby="answerTitle">
+        <h2 id="answerTitle">Answer</h2>
+        <div id="answer" class="answer-empty">Press <b>Ask</b>. The agent searches the regulations, reads the matching clauses, and answers only from them. A typical answer takes 5–15 seconds.</div>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel" aria-labelledby="traceTitle">
+        <h2 id="traceTitle">How it found the answer</h2>
+        <ol class="trace" id="trace"></ol>
+        <div class="trace-empty" id="traceEmpty">Each step the agent takes (searches, calculations, repairs) streams here live over SSE.</div>
+      </section>
+      <section class="panel" aria-labelledby="psgTitle">
+        <h2 id="psgTitle">Cited passages</h2>
+        <div class="passages" id="passages"><div class="trace-empty">The clauses behind the answer appear here.</div></div>
+      </section>
+    </div>
+  </div>
+  <p class="note">FastAPI backend from the project repository: clause-aware chunks, hybrid BM25 + vector retrieval with HyDE and RRF, a <code>min_score</code> floor, an allow-listed tool loop, and schema-validated, citation-checked answers. The evaluation in the report used <code>gemma-4-E4B-it</code> through the course proxy; this deployment may use a different model (shown above), so answers can differ from the reported numbers.</p>
+</div>
 <script>
-const f = document.getElementById('f'), q = document.getElementById('q'), go = document.getElementById('go');
-const steps = document.getElementById('steps'), out = document.getElementById('answer');
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function step(t) { const li = document.createElement('li'); li.textContent = t; steps.appendChild(li); }
-f.onsubmit = e => {
-  e.preventDefault(); steps.innerHTML = ''; out.style.display = 'none'; go.disabled = true;
-  const es = new EventSource('/ask/stream?question=' + encodeURIComponent(q.value));
-  es.addEventListener('tool_call', ev => { const d = JSON.parse(ev.data); step(`step ${d.step} → ${d.name}(${JSON.stringify(d.args)})`); });
-  es.addEventListener('tool_result', ev => { const d = JSON.parse(ev.data); step(`  ${d.ok ? '✓' : '✗'} ${d.summary}`); });
-  es.addEventListener('repair', ev => step('  repairing invalid JSON answer…'));
-  es.addEventListener('info', ev => step(JSON.parse(ev.data).message));
-  es.addEventListener('final', ev => {
-    const d = JSON.parse(ev.data), a = d.answer;
-    let html = `<div class="${a.abstained ? 'abstain' : ''}">${esc(a.answer)}</div>`;
-    if (d.sources.length) html += '<div class="src">' + d.sources.map(s => `<div><b>[${esc(s.chunk_id)}]</b> ${esc(s.source)}</div>`).join('') + '</div>';
-    html += `<div class="src">stopped: ${esc(d.stopped)} after ${d.steps} step(s)</div>`;
-    out.innerHTML = html; out.style.display = 'block';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+fetch("/health").then(r => r.json()).then(h => { $("model").textContent = "model: " + h.model + (h.embeddings ? " · embeddings: " + h.embeddings.split("/").pop() : ""); $("chunks").textContent = h.chunks + " clause passages"; }).catch(() => {});
+const EXAMPLES = [
+  "How many credits can an undergraduate register in a regular semester?",
+  "What GPA gets a graduate student's status terminated during probation?",
+  "What documents do I need when applying for a Thai student visa?",
+  "How long can I take a leave of absence?",
+  "My grades: A in a 3-credit course, B+ in a 3-credit course, C in a 1-credit course. What is my GPA?",
+  "What is the Wi-Fi password in the ECC building?",
+];
+for (const q of EXAMPLES) { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = q; b.onclick = () => { $("q").value = q; $("q").focus(); }; $("chips").append(b); }
+function step(html) { $("traceEmpty").hidden = true; const li = document.createElement("li"); li.className = "fade"; li.innerHTML = `<span>${html}</span>`; $("trace").append(li); }
+function highlight(text, quote) {
+  const t = esc(text); if (!quote || quote.length < 6) return t;
+  const q = esc(quote.replace(/\s+/g, " ").trim().replace(/^["“]|["”]$/g, "")), at = t.toLowerCase().indexOf(q.toLowerCase());
+  return at < 0 ? t : t.slice(0, at) + "<mark>" + t.slice(at, at + q.length) + "</mark>" + t.slice(at + q.length);
+}
+let es = null;
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const q = $("q").value.trim(); if (q.length < 3) return;
+  if (es) es.close();
+  $("trace").innerHTML = ""; $("traceEmpty").hidden = false; $("ask").disabled = true;
+  $("passages").innerHTML = ""; $("answer").className = "answer-empty"; $("answer").textContent = "Thinking…"; $("status").textContent = "Working…";
+  es = new EventSource("/ask/stream?question=" + encodeURIComponent(q));
+  es.addEventListener("tool_call", ev => { const d = JSON.parse(ev.data); step(d.name === "search_docs" ? `Searched <code>${esc(d.args && d.args.query)}</code>` : `Called <code>${esc(d.name)}</code> with <code>${esc(JSON.stringify(d.args))}</code>`); });
+  es.addEventListener("tool_result", ev => { const d = JSON.parse(ev.data); step(`${d.ok ? "→" : "✗"} ${esc(d.summary)}`); });
+  es.addEventListener("repair", ev => step("Reply failed validation; asked once for a corrected reply"));
+  es.addEventListener("info", ev => step(esc(JSON.parse(ev.data).message)));
+  es.addEventListener("final", ev => {
+    const d = JSON.parse(ev.data), a = d.answer, src = d.sources || [];
+    const idx = new Map(src.map((s, n) => [s.chunk_id, n + 1]));
+    const badge = a.abstained ? `<span class="badge no">Not in the KMITL documents</span>` : src.length ? `<span class="badge ok">Answered from ${src.length} cited passage${src.length > 1 ? "s" : ""}</span>` : `<span class="badge plain">Answered without searching the regulations</span>`;
+    const text = esc(a.answer).replace(/\[([A-Za-z0-9_.-]+:\d{4})\]/g, (m, id) => idx.has(id) ? `<span class="cite-mark">${idx.get(id)}</span>` : "");
+    const quotes = new Map((a.citations || []).map(c => [c.chunk_id, c.quote]));
+    let html = badge + `<div class="answer-text">${text}</div>`;
+    if (src.length) html += `<div class="citations">` + src.map((s, n) => `<div class="cite"><div class="src"><b>[${n + 1}]</b> ${esc(s.source)} · ${esc(s.chunk_id)}</div>${quotes.get(s.chunk_id) ? `<blockquote>“${esc(quotes.get(s.chunk_id))}”</blockquote>` : ""}</div>`).join("") + `</div>`;
+    $("answer").className = "fade"; $("answer").innerHTML = html;
+    $("passages").innerHTML = src.length ? src.map(s => { const head = /^\[([^\]]+)\]/.exec(s.text); const body = head ? s.text.slice(head[0].length).trim() : s.text;
+      return `<details class="psg cited" open><summary><span class="psg-id"><span>${esc(s.chunk_id)}</span><span>${esc(s.source)}</span><span>cosine ${s.cosine}</span></span><span class="psg-head">${esc(head ? head[1] : body.slice(0, 90) + "…")}</span></summary><div class="psg-body">${highlight(body, quotes.get(s.chunk_id))}</div></details>`; }).join("")
+      : `<div class="trace-empty">No passages cited.</div>`;
+    step(`Stopped: ${d.stopped === "answer" ? "final answer" : "step limit"} after ${d.steps} step${d.steps > 1 ? "s" : ""}`);
   });
-  es.addEventListener('error', ev => { if (ev.data) step('error: ' + JSON.parse(ev.data).message); });
-  es.addEventListener('done', () => { es.close(); go.disabled = false; });
-  es.onerror = () => { es.close(); go.disabled = false; };
-};
+  es.addEventListener("error", ev => { if (ev.data) { $("answer").className = "answer-empty"; $("answer").textContent = "The model call failed: " + JSON.parse(ev.data).message; } });
+  es.addEventListener("done", () => { es.close(); es = null; $("ask").disabled = false; $("status").textContent = ""; });
+  es.onerror = () => { if (es) { es.close(); es = null; } $("ask").disabled = false; $("status").textContent = ""; };
+});
 </script>
 </body>
 </html>

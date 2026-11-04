@@ -107,6 +107,22 @@ This writes `evaluation/results/answers.md` (accuracy judged by an LLM against y
 - Final answers are validated with Pydantic. Citations to chunks the model never saw are dropped, and an answer with no valid citation gets one repair attempt, then abstains.
 - If nothing clears `min_score`, the RAG path abstains without calling the model.
 
+## Deploy (free: Render web service + any OpenAI-compatible API)
+
+`app.py` builds the index if needed and serves the FastAPI app on `$PORT`. On a free host with 512 MB RAM, use API embeddings instead of local PyTorch:
+
+| Setting | Value (Google Gemini example) |
+|---|---|
+| Build command | `pip install -r requirements-deploy.txt` |
+| Start command | `python app.py` |
+| `OPENAI_API_KEY` (secret) | your provider's API key |
+| `OPENAI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
+| `CHAT_MODEL` | `gemini-3.8-flash` |
+| `EMBED_PROVIDER` / `EMBED_MODEL` | `openai` / `gemini-embedding-2` |
+| `PYTHON_VERSION` | `3.11.9` |
+
+Any OpenAI-compatible endpoint works (Groq, OpenRouter, OpenAI, the course proxy). An index built with a different embedder is rebuilt automatically at start-up. The `Dockerfile` (local MiniLM embeddings) works on any container host. The reported evaluation used `gemma-4-E4B-it` with MiniLM embeddings, and the web page shows which models the deployment uses.
+
 ## Tests
 
 ```bash

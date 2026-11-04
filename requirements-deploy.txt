@@ -1,0 +1,9 @@
+# Lightweight server install for free hosts (no torch): use API embeddings,
+# e.g. EMBED_PROVIDER=openai and EMBED_MODEL=gemini-embedding-2 with the Gemini endpoint.
+openai>=1.40
+pydantic>=2.6
+python-dotenv>=1.0
+numpy>=1.26
+pypdf>=4.0
+fastapi>=0.110
+uvicorn>=0.29

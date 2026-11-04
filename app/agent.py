@@ -199,7 +199,7 @@ def _final_event(ans: RAGAnswer, seen: dict[str, Hit], steps: int, stopped: str)
     return {
         "type": "final",
         "answer": ans.model_dump(),
-        "sources": [h.to_dict(max_chars=400) for h in cited],
+        "sources": [h.to_dict() for h in cited],
         "retrieved_ids": list(seen),
         "steps": steps,
         "stopped": stopped,

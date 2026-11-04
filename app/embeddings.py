@@ -47,9 +47,18 @@ class OpenAIEmbedder:
         self._client = get_client()
 
     def embed(self, texts: list[str]) -> np.ndarray:
+        import time
+
         rows: list[list[float]] = []
-        for i in range(0, len(texts), 64):
-            resp = self._client.embeddings.create(model=self.name, input=texts[i : i + 64])
+        for i in range(0, len(texts), 32):
+            for attempt in range(4):  # free tiers rate-limit bursts: back off and retry
+                try:
+                    resp = self._client.embeddings.create(model=self.name, input=texts[i : i + 32])
+                    break
+                except Exception as exc:
+                    if attempt == 3 or "429" not in str(exc) and "rate" not in str(exc).lower():
+                        raise
+                    time.sleep(5 * (attempt + 1))
             rows.extend(d.embedding for d in resp.data)
         return _normalise(np.array(rows))
 
