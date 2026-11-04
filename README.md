@@ -40,6 +40,7 @@ pip install -r requirements.txt
 cp .env.example .env            # fill in OPENAI_API_KEY / OPENAI_BASE_URL (never commit .env)
 
 python -m scripts.fetch_corpus  # downloads the 5 PDFs into data/raw/ and writes MANIFEST.json
+python -m scripts.ocr_scanned   # OCR the 2 image-only PDFs -> .txt (already committed; needs tesseract)
 python -m scripts.build_index   # chunk + embed -> data/index/
 ```
 
@@ -122,6 +123,8 @@ tests/        offline unit tests with a fictional fixture corpus
 
 ## Known limitations
 
+- Two PDFs (the 2022 undergraduate and graduate regulations, filed on the OIA page as "guidebooks") are scans with no text layer, so they are OCR'd with Tesseract. OCR errors (e.g. `B-E.` for `B.E.`) can hurt BM25 matching.
+- The corpus holds both the 2016 and the 2022 regulations, which can disagree. The answer should cite the 2022 version when both match.
 - PDF text extraction loses table structure, so grade tables and fee tables may chunk badly.
 - The LLM judge is the same small model as the generator. Spot-check its verdicts by hand and report the agreement rate.
 - The corpus covers English documents only. The 2016 regulations may have been amended since.

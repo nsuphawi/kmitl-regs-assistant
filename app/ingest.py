@@ -45,9 +45,13 @@ def _title_from_path(path: Path) -> str:
 
 def load_pages(raw_dir: Path) -> list[Page]:
     pages: list[Page] = []
-    for path in sorted(raw_dir.iterdir()):
+    files = sorted(raw_dir.iterdir())
+    txt_stems = {p.stem for p in files if p.suffix.lower() in {".txt", ".md"}}
+    for path in files:
         if path.name.startswith("."):
             continue
+        if path.suffix.lower() == ".pdf" and path.stem in txt_stems:
+            continue  # scanned PDF: use its OCR text (scripts/ocr_scanned.py) instead
         doc_id, title = path.stem, _title_from_path(path)
         suffix = path.suffix.lower()
         if suffix == ".pdf":
