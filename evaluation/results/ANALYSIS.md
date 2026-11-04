@@ -56,6 +56,15 @@ Closed-book: the model refused 29 of 30 times. It does not know KMITL's rules, s
 
 In v1, 9 answerable questions were wrongly turned into "I could not find this" because the model's JSON failed validation twice. In 4 of them the right chunk *had* been retrieved. That was the largest single source of error, and it came from generation and validation, not retrieval. The judge change is disclosed here because it was made after looking at the results. Its verdicts should be spot-checked by hand.
 
+### Repeatability: two identical runs (v2 vs v3, same code, MIN_SCORE=0.30)
+
+| system | accuracy v2 | accuracy v3 | items whose score changed |
+|---|---|---|---|
+| RAG | 0.800 | 0.800 | 0 / 36 |
+| agent | 0.717 | 0.783 | 5 / 36 (d02, d10, d17, d38, c01) |
+
+RAG is fully repeatable at temperature 0. The agent is not, even at temperature 0, because it writes its own search query and decides when to stop, so small differences compound over steps. A single agent number therefore carries about ±0.07 of run-to-run noise. This is why the RAG pipeline is reported as the main system and the agent as the interactive front-end.
+
 ## 4. Remaining failure cases (v2)
 
 - **Retrieval misses (gold not in the top 5):** d17, d19, d26, d32, d35. Most come from the OCR'd 2022 graduate regulations, or the question wording differs from the regulation's (d26: "bypass examinations" vs "skip the exams of related courses").
