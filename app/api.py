@@ -24,7 +24,10 @@ STATE: dict = {}
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    STATE["retriever"] = Retriever(Index.load(settings.index_dir))
+    try:
+        STATE["retriever"] = Retriever(Index.load(settings.index_dir))
+    except FileNotFoundError:
+        STATE["retriever"] = None  # app.py is building it in the background; /health reports ok=false
     yield
     STATE.clear()
 
@@ -35,7 +38,7 @@ app = FastAPI(title="KMITL Regulations Assistant", lifespan=lifespan)
 def _retriever() -> Retriever:
     r = STATE.get("retriever")
     if r is None:
-        raise HTTPException(503, "index not loaded")
+        raise HTTPException(503, "The search index is still being built. Try again in a few minutes.")
     return r
 
 

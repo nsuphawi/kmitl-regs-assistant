@@ -43,7 +43,22 @@ def ensure_index() -> None:
 
 
 if __name__ == "__main__":
-    ensure_index()
-    from app.api import app as fastapi_app
+    import threading
 
-    uvicorn.run(fastapi_app, host="0.0.0.0", port=int(os.getenv("PORT", "7860")))
+    from app import api
+
+    if _index_matches():
+        print(f"Using existing index at {settings.index_dir}")
+    else:
+        # Open the port at once (hosts kill services that don't), build in the background.
+        def build() -> None:
+            ensure_index()
+            from app.retrieve import Retriever
+            from app.store import Index
+
+            api.STATE["retriever"] = Retriever(Index.load(settings.index_dir))
+            print("Index ready; the app is serving questions.", flush=True)
+
+        threading.Thread(target=build, daemon=True).start()
+
+    uvicorn.run(api.app, host="0.0.0.0", port=int(os.getenv("PORT", "7860")))

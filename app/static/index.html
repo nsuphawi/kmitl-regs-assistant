@@ -138,7 +138,14 @@ body { margin: 0; }
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-fetch("/health").then(r => r.json()).then(h => { $("model").textContent = "model: " + h.model + (h.embeddings ? " · embeddings: " + h.embeddings.split("/").pop() : ""); $("chunks").textContent = h.chunks + " clause passages"; }).catch(() => {});
+function checkHealth() {
+  fetch("/health").then(r => r.json()).then(h => {
+    $("model").textContent = "model: " + h.model + (h.embeddings ? " · embeddings: " + h.embeddings.split("/").pop() : "");
+    if (h.ok) { $("chunks").textContent = h.chunks + " clause passages"; $("ask").disabled = false; if ($("status").dataset.building) { $("status").textContent = ""; delete $("status").dataset.building; } }
+    else { $("ask").disabled = true; $("status").dataset.building = "1"; $("status").textContent = "Starting up: building the search index (a few minutes after a restart)…"; setTimeout(checkHealth, 15000); }
+  }).catch(() => setTimeout(checkHealth, 15000));
+}
+checkHealth();
 const EXAMPLES = [
   "How many credits can an undergraduate register in a regular semester?",
   "What GPA gets a graduate student's status terminated during probation?",

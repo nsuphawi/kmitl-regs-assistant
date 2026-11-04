@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import math
+import os
 import re
+import time
 from collections import Counter
 
 import numpy as np
@@ -46,20 +48,40 @@ class OpenAIEmbedder:
         self.name = model
         self._client = get_client()
 
-    def embed(self, texts: list[str]) -> np.ndarray:
-        import time
+    # Free tiers count every text as one request (Gemini: 100 per minute), so pace ourselves.
+    rpm = int(os.getenv("EMBED_RPM", "90"))
+    _sent: list[float] = []  # timestamps of texts sent, shared by all instances
 
+    def _wait_for(self, n: int) -> None:
+        while True:
+            now = time.time()
+            self._sent[:] = [t for t in self._sent if now - t < 60]
+            if len(self._sent) + n <= self.rpm:
+                self._sent.extend([now] * n)
+                return
+            wait = 60 - (now - self._sent[0]) + 0.5
+            print(f"  embedding rate limit: waiting {wait:.0f}s", flush=True)
+            time.sleep(wait)
+
+    def embed(self, texts: list[str]) -> np.ndarray:
         rows: list[list[float]] = []
-        for i in range(0, len(texts), 32):
-            for attempt in range(4):  # free tiers rate-limit bursts: back off and retry
+        batch = max(1, min(32, self.rpm))
+        for i in range(0, len(texts), batch):
+            part = texts[i : i + batch]
+            for attempt in range(6):
+                self._wait_for(len(part))
                 try:
-                    resp = self._client.embeddings.create(model=self.name, input=texts[i : i + 32])
+                    resp = self._client.embeddings.create(model=self.name, input=part)
                     break
                 except Exception as exc:
-                    if attempt == 3 or "429" not in str(exc) and "rate" not in str(exc).lower():
+                    msg = str(exc)
+                    if attempt == 5 or ("429" not in msg and "rate" not in msg.lower()):
                         raise
-                    time.sleep(5 * (attempt + 1))
+                    m = re.search(r"retry in ([0-9.]+)s", msg)
+                    time.sleep(float(m.group(1)) + 1 if m else 15)
             rows.extend(d.embedding for d in resp.data)
+            if len(texts) > batch:
+                print(f"  embedded {min(i + batch, len(texts))}/{len(texts)}", flush=True)
         return _normalise(np.array(rows))
 
     def state(self) -> dict:
