@@ -101,7 +101,11 @@ def run_agent_events(
         if native_tools:
             try:
                 resp = chat_fn(messages, tools=TOOL_SPECS)
-            except Exception as exc:  # proxy/model without function calling -> prompted JSON
+            except Exception as exc:
+                # Only a request the provider REJECTS (400/422: no function calling) means
+                # "use prompted JSON". Rate limits, timeouts and auth errors are re-raised.
+                if getattr(exc, "status_code", None) not in (400, 422) and type(exc).__name__ != "TypeError":
+                    raise
                 native_tools = False
                 messages[0] = {"role": "system", "content": SYSTEM + PROMPTED_PROTOCOL}
                 yield {"type": "info", "message": f"native tool calling unavailable ({type(exc).__name__}); using prompted JSON"}

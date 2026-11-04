@@ -125,3 +125,25 @@ def test_validation_tolerates_common_small_model_quirks():
     # an inline id that was NOT in the context is still rejected
     with pytest.raises(ValueError):
         validate_answer('{"answer": "made up [doc:9999].", "citations": []}', allowed)
+
+
+def test_agent_does_not_mask_rate_limits(retriever):
+    class RateLimited(Exception):
+        status_code = 429
+
+    def boom(messages, **kw):
+        raise RateLimited("Error code: 429")
+
+    with pytest.raises(RateLimited):
+        run_agent("q", retriever, chat_fn=boom)
+
+
+def test_friendly_error_messages():
+    from app.api import friendly_error
+
+    class E(Exception):
+        def __init__(self, code):
+            self.status_code = code
+
+    assert "rate limit" in friendly_error(E(429))
+    assert "model" in friendly_error(E(404))

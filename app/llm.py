@@ -15,12 +15,34 @@ ChatFn = Callable[..., Any]
 def get_client():
     from openai import OpenAI
 
-    return OpenAI()  # reads OPENAI_API_KEY / OPENAI_BASE_URL from the environment
+    import os
+
+    # Reads OPENAI_API_KEY / OPENAI_BASE_URL from the environment. Fail fast rather than
+    # retrying for minutes: a free-tier 429 should reach the user as a clear message.
+    return OpenAI(timeout=float(os.getenv("LLM_TIMEOUT", "60")),
+                  max_retries=int(os.getenv("LLM_MAX_RETRIES", "1")))
+
+
+@lru_cache(maxsize=1)
+def get_embed_client():
+    """Embeddings may come from a different provider than chat (e.g. chat on Groq, embeddings on
+    Gemini): set EMBED_API_KEY / EMBED_BASE_URL. Unset = the same endpoint as chat."""
+    import os
+
+    from openai import OpenAI
+
+    key, base = os.getenv("EMBED_API_KEY"), os.getenv("EMBED_BASE_URL")
+    if not key and not base:
+        return get_client()
+    return OpenAI(api_key=key or os.getenv("OPENAI_API_KEY"), base_url=base or os.getenv("OPENAI_BASE_URL"),
+                  timeout=float(os.getenv("LLM_TIMEOUT", "60")), max_retries=1)
 
 
 def chat(messages: list[dict], **kwargs) -> Any:
     """Deterministic chat call (temperature=0) — everything we evaluate must be repeatable."""
     kwargs.setdefault("temperature", 0)
+    if settings.reasoning_effort:
+        kwargs.setdefault("reasoning_effort", settings.reasoning_effort)
     return get_client().chat.completions.create(
         model=settings.chat_model, messages=messages, **kwargs
     )

@@ -43,10 +43,10 @@ class OpenAIEmbedder:
     """The proxy's /embeddings endpoint (only if your proxy serves an embedding model)."""
 
     def __init__(self, model: str):
-        from .llm import get_client
+        from .llm import get_embed_client
 
         self.name = model
-        self._client = get_client()
+        self._client = get_embed_client()
 
     # Free tiers count every text as one request (Gemini: 100 per minute), so pace ourselves.
     rpm = int(os.getenv("EMBED_RPM", "90"))

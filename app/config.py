@@ -26,6 +26,9 @@ def _env(name: str, default: str) -> str:
 @dataclass(frozen=True)
 class Settings:
     chat_model: str = _env("CHAT_MODEL", "gemma-4-E4B-it")
+    # Optional, for providers whose models "think" before answering (e.g. Gemini: low).
+    # Lower effort = much faster answers. Empty = provider default.
+    reasoning_effort: str = _env("LLM_REASONING_EFFORT", "")
     # local  = sentence-transformers on your machine (default, works without proxy embeddings)
     # openai = the proxy's /embeddings endpoint (set EMBED_MODEL to a model it serves)
     # tfidf  = pure-numpy fallback, no downloads (used by the unit tests)

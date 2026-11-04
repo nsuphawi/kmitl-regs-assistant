@@ -42,6 +42,19 @@ def _retriever() -> Retriever:
     return r
 
 
+def friendly_error(exc: Exception) -> str:
+    code = getattr(exc, "status_code", None)
+    if code == 429:
+        return "The AI provider's rate limit was reached (free tier). Wait about a minute and ask again."
+    if code in (401, 403):
+        return "The AI provider rejected the API key. Check OPENAI_API_KEY on the server."
+    if code == 404:
+        return "The AI provider doesn't know this model. Check CHAT_MODEL on the server."
+    if type(exc).__name__ in ("APITimeoutError", "APIConnectionError"):
+        return "The AI provider didn't answer in time. Ask again."
+    return f"Something went wrong ({type(exc).__name__}). Ask again."
+
+
 @app.get("/health")
 def health() -> dict:
     r = STATE.get("retriever")
@@ -71,7 +84,7 @@ async def ask_stream(question: str = Query(..., min_length=3, max_length=500)) -
             for ev in run_agent_events(question, r):
                 yield f"event: {ev['type']}\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
         except Exception as exc:  # surface failures to the client instead of a dead stream
-            yield f"event: error\ndata: {json.dumps({'type': 'error', 'message': str(exc)[:300]})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'type': 'error', 'message': friendly_error(exc)})}\n\n"
         yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(iterate_in_threadpool(events()), media_type="text/event-stream",

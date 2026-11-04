@@ -46,7 +46,9 @@ class FakeLLM:
 
     def __call__(self, messages, **kwargs):
         if self.reject_tools and "tools" in kwargs:
-            raise RuntimeError("tools not supported")
+            err = RuntimeError("tools not supported")
+            err.status_code = 400  # what an OpenAI-compatible server returns for an unsupported field
+            raise err
         self.calls.append({"messages": [dict(m) for m in messages], **kwargs})
         reply = self.replies.pop(0) if self.replies else '{"answer": "fallback", "citations": [], "abstained": true}'
         if isinstance(reply, list):
