@@ -2,6 +2,10 @@
 and a scripted fake LLM so tests never touch the network."""
 from __future__ import annotations
 
+import os
+
+os.environ["HYDE"] = "0"  # before importing app: scripted fake LLM must not be consumed by HyDE
+
 import json
 import shutil
 from pathlib import Path

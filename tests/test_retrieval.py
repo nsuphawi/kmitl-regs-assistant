@@ -44,7 +44,34 @@ def test_chunks_track_pages_and_ids(index):
 
 def test_gold_matching_by_evidence_quote(index):
     item = {"id": "t", "question": "?", "answerable": True,
-            "evidence": ["shall be dismissed"], "doc": "example_handbook"}
+            "evidence": ["shall be dismissed"], "doc": "example_handbook", "doc_only": True}
     rel = relevant_ids(item, index.chunks)
     assert rel and all("dismissed" in c.text for c in index.chunks if c.id in rel)
     assert relevant_ids({**item, "answerable": False}, index.chunks) == set()
+
+
+def test_hyde_expansion_bridges_vocabulary(retriever):
+    q = "What happens to students with a really bad average?"
+    gold = lambda hits: any("dismissed" in h.chunk.text for h in hits[:1])
+    expand = lambda _: "A student whose cumulative grade point average falls below 1.50 shall be dismissed."
+    assert gold(retriever.search(q, k=3, min_score=-1, expand_fn=expand))
+
+
+def test_hyde_failure_falls_back_to_plain_query(retriever):
+    plain = retriever.search("ACAD-07", k=3, min_score=-1)
+    assert [h.chunk.id for h in retriever.search("ACAD-07", k=3, min_score=-1, expand_fn=lambda _: "")] == [h.chunk.id for h in plain]
+
+
+def test_clause_chunking_isolates_numbered_clause():
+    from app.ingest import Page, chunk_pages, clause_starts
+    text = ("Article 14. Enrollment and payment of tuition fees: 14.1 Students must enroll and pay fees. "
+            + "word " * 120 + "end. 14.4 In each regular semester, students have to enroll in not less than "
+            "9 credits and not more than 22 credits. Article 15. Late payment under Article 42.4 hereof is fined.")
+    words = text.split()
+    starts = clause_starts(words)
+    assert words.index("14.4") in starts and words.index("15.") - 1 in starts
+    assert words.index("42.4") not in starts  # cross-reference, not a boundary
+    chunks = chunk_pages([Page("d", "D", 1, text)], chunk_words=60, overlap=10, strategy="clause")
+    target = [c for c in chunks if "not more than 22 credits" in c.text]
+    assert len(target) == 1 and target[0].text.startswith("[Article 14. Enrollment")
+    assert "word word" not in target[0].text  # not diluted by the long 14.1 clause

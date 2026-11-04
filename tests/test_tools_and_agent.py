@@ -108,3 +108,20 @@ def test_agent_hallucinated_citation_triggers_repair(retriever, fake_llm):
     ])
     res = run_agent("visa reporting?", retriever, chat_fn=llm, min_score=-1)
     assert any(e["type"] == "repair" for e in res.trace) and res.answer.citations[0].chunk_id == cid
+
+
+def test_validation_tolerates_common_small_model_quirks():
+    allowed = {"doc:0013"}
+    # raw newline inside a JSON string + bracketed id + over-long quote
+    raw = '{"answer": "Two plans:\n* Plan 1: 72 credits", "citations": [{"chunk_id": "[doc:0013]", "quote": "%s"}]}' % ("x" * 900)
+    ans, _ = validate_answer(raw, allowed)
+    assert ans.citations[0].chunk_id == "doc:0013" and len(ans.citations[0].quote) == 400
+    # citations given as plain strings
+    ans, _ = validate_answer('{"answer": "a", "citations": ["doc:0013"]}', allowed)
+    assert ans.citations[0].chunk_id == "doc:0013"
+    # empty citations but the id is cited inline in the answer text
+    ans, _ = validate_answer('{"answer": "9 to 22 credits [doc:0013].", "citations": []}', allowed)
+    assert [c.chunk_id for c in ans.citations] == ["doc:0013"]
+    # an inline id that was NOT in the context is still rejected
+    with pytest.raises(ValueError):
+        validate_answer('{"answer": "made up [doc:9999].", "citations": []}', allowed)

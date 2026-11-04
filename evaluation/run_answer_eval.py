@@ -31,8 +31,10 @@ RESULTS = ROOT / "evaluation" / "results"
 
 JUDGE = (
     "You grade answers about KMITL regulations. Compare the CANDIDATE to the REFERENCE answer. "
-    "'correct' = same key facts (numbers, conditions) with no contradiction; 'partial' = some key facts "
-    "right but incomplete; 'incorrect' = wrong, contradicting, or a refusal. "
+    "'correct' = contains the reference's key facts (numbers, conditions) with no contradiction. "
+    "Extra details that do not contradict the reference (e.g. exceptions, the graduate-level rule, "
+    "article numbers) do NOT lower the grade. 'partial' = some key facts right but a key fact missing; "
+    "'incorrect' = wrong, contradicting, or a refusal. "
     'Reply with JSON only: {"verdict": "correct|partial|incorrect", "reason": "<one sentence>"}'
 )
 
@@ -52,17 +54,18 @@ def run_system(name: str, it: dict, r: Retriever) -> dict:
     t0 = time.time()
     if name == "closed":
         res = answer_closed_book(it["question"])
-        ans, repaired, steps = res.answer, res.repaired, 0
+        ans, repaired, steps, error = res.answer, res.repaired, 0, res.error
     elif name == "rag":
         res = answer_rag(it["question"], r)
-        ans, repaired, steps = res.answer, res.repaired, 1
+        ans, repaired, steps, error = res.answer, res.repaired, 1, res.error
     elif name == "agent":
         res = run_agent(it["question"], r)
-        ans, repaired, steps = res.answer, any(e["type"] == "repair" for e in res.trace), res.steps
+        repairs = [e["error"] for e in res.trace if e["type"] == "repair"]
+        ans, repaired, steps, error = res.answer, bool(repairs), res.steps, (repairs[0] if repairs else None)
     else:
         raise ValueError(name)
     return {"answer": ans.answer, "abstained": ans.abstained, "cited": [c.chunk_id for c in ans.citations],
-            "repaired": repaired, "steps": steps, "latency_s": round(time.time() - t0, 2)}
+            "repaired": repaired, "validation_error": error, "steps": steps, "latency_s": round(time.time() - t0, 2)}
 
 
 def main() -> None:

@@ -13,7 +13,6 @@ Requires the poppler-utils and tesseract-ocr system packages.
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
 import subprocess
 import tempfile
@@ -22,9 +21,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 from app.config import settings
-
-_PAGE_NUM = re.compile(r"\s*-?\s*\d{1,3}\s*-?\.?\s*")
-
+from scripts.ocr_clean import clean_ocr_text
 
 def needs_ocr(pdf: Path) -> bool:
     reader = PdfReader(str(pdf))
@@ -42,8 +39,7 @@ def ocr_pdf(pdf: Path, dpi: int) -> list[str]:
             text = subprocess.run(["tesseract", str(img), "-", "-l", "eng", "--psm", "3"],
                                   check=True, capture_output=True, text=True).stdout
             img.unlink()
-            lines = [l for l in text.splitlines() if l.strip() != "Translation" and not _PAGE_NUM.fullmatch(l)]
-            pages.append("\n".join(lines).strip())
+            pages.append(clean_ocr_text(text))
             print(f"  {pdf.name} page {p}/{n}")
     return pages
 

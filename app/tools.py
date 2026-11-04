@@ -117,10 +117,10 @@ def validate_args(name: str, args: Any) -> dict:
     raise ToolError(f"no validator for {name!r}")  # pragma: no cover
 
 
-def execute(name: str, args: dict, retriever: Retriever, min_score: float | None = None) -> tuple[Any, list]:
+def execute(name: str, args: dict, retriever: Retriever, min_score: float | None = None, expand_fn=None) -> tuple[Any, list]:
     """Run a validated tool. Returns (json-able result for the model, hits for citation bookkeeping)."""
     if name == "search_docs":
-        hits = retriever.search(args["query"], k=args["k"], min_score=min_score)
+        hits = retriever.search(args["query"], k=args["k"], min_score=min_score, expand_fn=expand_fn)
         if not hits:
             return {"results": [], "note": "No passage passed the relevance floor. The documents may not cover this."}, []
         return {"results": [h.to_dict(max_chars=1200) for h in hits]}, hits

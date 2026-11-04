@@ -53,7 +53,10 @@ def relevant_ids(item: dict, chunks: list[Chunk], _cache: dict | None = None) ->
     if not item.get("answerable", True):
         return set()
     quotes = [normalise(q) for q in item.get("evidence", []) if q.strip()]
-    doc = item.get("doc")
+    # Any chunk holding the evidence counts, whichever document it is in: the 2016 and 2022
+    # regulations repeat many clauses verbatim, and retrieving either copy answers the question.
+    # Set "doc_only": true on an item to require the labelled document.
+    doc = item.get("doc") if item.get("doc_only") else None
     out = set()
     for c in chunks:
         if doc and c.doc_id != doc:

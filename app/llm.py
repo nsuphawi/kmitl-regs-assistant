@@ -37,14 +37,15 @@ def extract_json(text: str) -> Any:
     if not isinstance(text, str):
         raise ValueError("model returned no text")
     s = _FENCE.sub("", text.strip()).strip()
+    # strict=False: small models often put raw newlines (bullet lists) inside JSON strings
     try:
-        return json.loads(s)
+        return json.loads(s, strict=False)
     except json.JSONDecodeError:
         pass
     start, end = s.find("{"), s.rfind("}")
     if start != -1 and end > start:
         try:
-            return json.loads(s[start : end + 1])
+            return json.loads(s[start : end + 1], strict=False)
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid JSON: {exc}") from exc
     raise ValueError("no JSON object found")

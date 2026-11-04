@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from app.config import ROOT, settings
-from app.retrieve import Retriever, llm_rerank
+from app.retrieve import Retriever, hyde_expand, llm_rerank
 from app.store import Index, build_index
 
 from .dataset import load_eval, relevant_ids
@@ -23,22 +23,22 @@ RESULTS = ROOT / "evaluation" / "results"
 KS = (1, 3, 5)
 
 
-def get_index(chunk_words: int, overlap: int, provider: str, rebuild: bool) -> Index:
+def get_index(chunk_words: int, overlap: int, provider: str, rebuild: bool, strategy: str = "window") -> Index:
     """Cache one index per (chunk size, provider) so sweeps are reproducible and fast."""
-    path = ROOT / "data" / "index_cache" / f"cs{chunk_words}_ov{overlap}_{provider}"
+    path = ROOT / "data" / "index_cache" / f"{strategy}_cs{chunk_words}_ov{overlap}_{provider}"
     if path.exists() and not rebuild:
         return Index.load(path)
-    idx = build_index(settings.raw_dir, chunk_words, overlap, provider)
+    idx = build_index(settings.raw_dir, chunk_words, overlap, provider, strategy=strategy)
     idx.save(path)
     return idx
 
 
-def score_mode(r: Retriever, items: list[dict], gold: dict[str, set], mode: str, rerank: bool = False) -> dict:
+def score_mode(r: Retriever, items: list[dict], gold: dict[str, set], mode: str, rerank: bool = False, hyde: bool = False) -> dict:
     rows = []
     for it in items:
         rel = gold[it["id"]]
         hits = r.search(it["question"], k=max(KS), mode=mode, min_score=-1.0,
-                        rerank_fn=llm_rerank if rerank else None)
+                        rerank_fn=llm_rerank if rerank else None, expand_fn=hyde_expand if hyde else None)
         ids = [h.chunk.id for h in hits]
         rows.append({"id": it["id"], "retrieved": ids, "relevant": sorted(rel),
                      **{f"hit@{k}": hit_at_k(ids, rel, k) for k in KS},
@@ -68,11 +68,13 @@ def fmt(x: float) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--qa", type=Path, default=ROOT / "data" / "eval" / "qa.jsonl")
-    ap.add_argument("--chunk-sizes", default="150,300,600")
+    ap.add_argument("--chunk-sizes", default="100,150,300")
+    ap.add_argument("--strategies", default="window,clause", help="chunking strategies to compare")
     ap.add_argument("--overlap-ratio", type=float, default=1 / 6)
     ap.add_argument("--provider", default=settings.embed_provider)
-    ap.add_argument("--thresholds", default="0.0,0.1,0.2,0.25,0.3,0.35,0.4,0.5")
+    ap.add_argument("--thresholds", default="0.0,0.2,0.3,0.35,0.4,0.45,0.5,0.55,0.6")
     ap.add_argument("--rerank", action="store_true", help="also evaluate hybrid + LLM rerank (slow: 1 call/chunk)")
+    ap.add_argument("--hyde", action="store_true", help="also evaluate hybrid + HyDE query expansion (1 call/question)")
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--include-unverified", action="store_true")
     args = ap.parse_args()
@@ -90,26 +92,31 @@ def main() -> None:
               "runs": {}, "min_score_sweep": [], "label_problems": []}
     md = [f"# Retrieval evaluation\n\n{time.strftime('%Y-%m-%d %H:%M')} · embeddings: `{args.provider}` · "
           f"{len(answerable)} answerable / {len(unanswerable)} unanswerable questions\n",
-          "| chunk words | mode | hit@1 | hit@3 | hit@5 | recall@5 | MRR |", "|---|---|---|---|---|---|---|"]
+          "| chunking | words | mode | hit@1 | hit@3 | hit@5 | recall@5 | MRR |", "|---|---|---|---|---|---|---|---|"]
 
     default_r, default_gold = None, None
-    for size in sizes:
-        idx = get_index(size, max(0, round(size * args.overlap_ratio)), args.provider, args.rebuild)
+    configs = [(st, sz) for st in args.strategies.split(",") for sz in sizes]
+    for strategy, size in configs:
+        idx = get_index(size, max(0, round(size * args.overlap_ratio)), args.provider, args.rebuild, strategy)
         r = Retriever(idx)
         gold = {it["id"]: relevant_ids(it, idx.chunks) for it in items}
         missing = [it["id"] for it in answerable if not gold[it["id"]]]
         if missing:
-            print(f"  [cs={size}] evidence not found in any chunk for: {missing} (fix the quote or doc name)")
-            report["label_problems"].append({"chunk_words": size, "ids": missing})
-        run_modes = modes + (["hybrid+rerank"] if args.rerank and size == settings.chunk_words else [])
-        for mode in run_modes:
-            res = score_mode(r, answerable, gold, "hybrid" if mode == "hybrid+rerank" else mode, rerank=mode == "hybrid+rerank")
-            report["runs"][f"cs{size}/{mode}"] = res
+            print(f"  [{strategy}/{size}] evidence not found in any chunk for: {missing} (fix the quote or doc name)")
+            report["label_problems"].append({"strategy": strategy, "chunk_words": size, "ids": missing})
+        extra = []
+        is_default = strategy == settings.chunk_strategy and size == settings.chunk_words
+        if is_default:
+            extra += ["hybrid+hyde"] if args.hyde else []
+            extra += ["hybrid+rerank"] if args.rerank else []
+        for mode in modes + extra:
+            res = score_mode(r, answerable, gold, mode.split("+")[0], rerank=mode.endswith("rerank"), hyde=mode.endswith("hyde"))
+            report["runs"][f"{strategy}/{size}/{mode}"] = res
             s = res["summary"]
-            md.append(f"| {size} | {mode} | {fmt(s['hit@1'])} | {fmt(s['hit@3'])} | {fmt(s['hit@5'])} | {fmt(s['recall@5'])} | {fmt(s['mrr'])} |")
-            print(f"  cs={size:<4} {mode:<14} hit@1={fmt(s['hit@1'])} hit@5={fmt(s['hit@5'])} MRR={fmt(s['mrr'])}")
-        if size == settings.chunk_words or default_r is None:
-            default_r, default_gold, default_size = r, gold, size
+            md.append(f"| {strategy} | {size} | {mode} | {fmt(s['hit@1'])} | {fmt(s['hit@3'])} | {fmt(s['hit@5'])} | {fmt(s['recall@5'])} | {fmt(s['mrr'])} |")
+            print(f"  {strategy:<7} {size:<4} {mode:<14} hit@1={fmt(s['hit@1'])} hit@5={fmt(s['hit@5'])} MRR={fmt(s['mrr'])}")
+        if is_default or default_r is None:
+            default_r, default_gold, default_size = r, gold, f"{strategy} {size}"
 
     if unanswerable:
         thresholds = [float(t) for t in args.thresholds.split(",")]

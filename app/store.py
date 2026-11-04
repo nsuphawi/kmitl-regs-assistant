@@ -39,13 +39,13 @@ class Index:
         return cls(chunks, np.load(path / "embeddings.npy"), embedder, meta)
 
 
-def build_index(raw_dir: Path, chunk_words: int, overlap: int, provider: str | None = None, model: str | None = None) -> Index:
+def build_index(raw_dir: Path, chunk_words: int, overlap: int, provider: str | None = None, model: str | None = None, strategy: str = "window") -> Index:
     pages = load_pages(raw_dir)
     if not pages:
         raise RuntimeError(f"No documents found in {raw_dir}. Run: python -m scripts.fetch_corpus")
-    chunks = chunk_pages(pages, chunk_words, overlap)
+    chunks = chunk_pages(pages, chunk_words, overlap, strategy)
     texts = [c.text for c in chunks]
     embedder = make_embedder(provider, model, corpus=texts)
     emb = embedder.embed(texts)
-    meta = {"chunk_words": chunk_words, "chunk_overlap": overlap, "n_chunks": len(chunks)}
+    meta = {"chunk_strategy": strategy, "chunk_words": chunk_words, "chunk_overlap": overlap, "n_chunks": len(chunks)}
     return Index(chunks, emb, embedder, meta)

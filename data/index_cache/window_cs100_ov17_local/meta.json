@@ -1,0 +1,1 @@
+{"chunk_strategy": "window", "chunk_words": 100, "chunk_overlap": 17, "n_chunks": 641, "embedder": {"provider": "local", "model": "sentence-transformers/all-MiniLM-L6-v2"}}

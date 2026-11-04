@@ -59,28 +59,39 @@ class Retriever:
         min_score: float | None = None,
         pool: int | None = None,
         rerank_fn=None,
+        expand_fn=None,
     ) -> list[Hit]:
+        """expand_fn(query) -> hypothetical passage (HyDE). Its rankings are fused with the
+        original query's rankings by RRF; the min_score floor still uses the ORIGINAL query's
+        cosine so abstention behaviour does not depend on what the model imagined."""
         k = k or settings.top_k
         pool = max(pool or settings.candidate_pool, k)
         min_score = settings.min_score if min_score is None else min_score
+        if mode not in ("vector", "bm25", "hybrid"):
+            raise ValueError(f"unknown mode {mode!r}")
         if not query.strip() or not self.chunks:
             return []
 
         cos = self._cosines(query)
-        if mode == "vector":
-            order = np.argsort(-cos, kind="stable")[:pool]
-            ranked = [(int(i), float(cos[i])) for i in order]
-        elif mode == "bm25":
-            bm = self.bm25.scores(query)
-            order = [int(i) for i in np.argsort(-bm, kind="stable")[:pool] if bm[i] > 0]
-            ranked = [(i, float(bm[i])) for i in order]
-        elif mode == "hybrid":
-            bm = self.bm25.scores(query)
-            bm_rank = [int(i) for i in np.argsort(-bm, kind="stable")[:pool] if bm[i] > 0]
-            vec_rank = [int(i) for i in np.argsort(-cos, kind="stable")[:pool]]
-            ranked = rrf([bm_rank, vec_rank])[:pool]
+        queries = [(query, cos)]
+        if expand_fn is not None:
+            hypo = (expand_fn(query) or "").strip()
+            if hypo:
+                queries.append((hypo, self._cosines(hypo)))
+
+        rank_lists: list[list[int]] = []
+        for q, q_cos in queries:
+            if mode in ("bm25", "hybrid"):
+                bm = self.bm25.scores(q)
+                rank_lists.append([int(i) for i in np.argsort(-bm, kind="stable")[:pool] if bm[i] > 0])
+            if mode in ("vector", "hybrid"):
+                rank_lists.append([int(i) for i in np.argsort(-q_cos, kind="stable")[:pool]])
+
+        if len(rank_lists) == 1:  # single list: keep the raw score as rank_score
+            single = bm if mode == "bm25" else cos
+            ranked = [(i, float(single[i])) for i in rank_lists[0]]
         else:
-            raise ValueError(f"unknown mode {mode!r}")
+            ranked = rrf(rank_lists)[:pool]
 
         hits = [Hit(self.chunks[i], float(cos[i]), s) for i, s in ranked]
         # min_score floor on cosine: drop weakly-related chunks so the model can abstain.
@@ -88,6 +99,28 @@ class Retriever:
         if rerank_fn is not None and hits:
             hits = rerank_fn(query, hits)
         return hits[:k]
+
+
+HYDE_PROMPT = (
+    "Write ONE short passage (2-3 sentences) in the formal style of a university regulation that "
+    "would answer the question. Use regulation wording such as 'Students shall ...', "
+    "'not less than ... not more than ...', 'Article ...'. Invent placeholder numbers if needed "
+    "(they are only used for searching, never shown to the user). Reply with the passage only."
+)
+
+
+def hyde_expand(query: str, chat_fn=None) -> str:
+    """HyDE query expansion: questions ('how many credits can I register?') and regulations
+    ('students have to enroll in not less than 9 ... not more than 22 credits') use different
+    words; a hypothetical regulation sentence bridges that vocabulary gap. 1 model call."""
+    from .llm import chat
+
+    chat_fn = chat_fn or chat
+    try:
+        msg = [{"role": "system", "content": HYDE_PROMPT}, {"role": "user", "content": query}]
+        return (chat_fn(msg).choices[0].message.content or "")[:800]
+    except Exception:  # expansion is an optimisation: never let it break retrieval
+        return ""
 
 
 def llm_rerank(query: str, hits: list[Hit], chat_fn=None) -> list[Hit]:

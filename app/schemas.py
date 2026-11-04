@@ -10,6 +10,18 @@ class Citation(BaseModel):
     chunk_id: str = Field(..., max_length=120)
     quote: str = Field("", max_length=400, description="Short supporting quote copied from the chunk")
 
+    @field_validator("chunk_id", mode="before")
+    @classmethod
+    def _clean_id(cls, v):
+        # models often wrap ids as "[doc:0013]" or add spaces
+        return v.strip().strip("[]()").strip() if isinstance(v, str) else v
+
+    @field_validator("quote", mode="before")
+    @classmethod
+    def _trim_quote(cls, v):
+        # a too-long quote is not a reason to throw away a correct answer: truncate it
+        return v[:400] if isinstance(v, str) else ("" if v is None else v)
+
 
 class RAGAnswer(BaseModel):
     """The structured answer the model must return (validated, repaired once on failure)."""
@@ -17,6 +29,21 @@ class RAGAnswer(BaseModel):
     answer: str = Field(..., max_length=4000)
     citations: list[Citation] = Field(default_factory=list, max_length=8)
     abstained: bool = False
+
+    @field_validator("citations", mode="before")
+    @classmethod
+    def _coerce_citations(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):  # accept ["doc:0013", ...] as well as [{"chunk_id": ...}, ...]
+            v = [{"chunk_id": c} if isinstance(c, str) else c for c in v]
+            return v[:8]
+        return v
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def _trim_answer(cls, v):
+        return v[:4000] if isinstance(v, str) else v
 
     @field_validator("answer")
     @classmethod
